@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 Smart Medicine Room Dashboard</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --text:#e9eefc;
+      --muted:#a8b3d6;
+      --line:rgba(255,255,255,.08);
+      --ok:#2bd47d;
+      --warn:#f6c453;
+      --danger:#ff5c7a;
+      --shadow: 0 14px 40px rgba(0,0,0,.35);
+      --radius:16px;
+    }
+    * { box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(122,167,255,.22), transparent 60%),
+                  radial-gradient(900px 500px at 100% 0%, rgba(43,212,125,.18), transparent 55%),
+                  radial-gradient(900px 600px at 30% 100%, rgba(255,92,122,.12), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+    }
+    .wrap{ max-width: 1100px; margin: 18px auto; padding: 0 14px 40px; }
+    header{
+      display:flex; gap:14px; align-items:flex-end; justify-content:space-between;
+      margin: 6px 0 16px;
+    }
+    .title h1{ margin:0; font-size: 22px; letter-spacing:.2px; }
+    .title .sub{ margin-top:6px; color: var(--muted); font-size:13px; }
+    .pillbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .badge{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      font-size: 12px;
+      color: var(--muted);
+      user-select:none;
+    }
+    .dot{ width:8px; height:8px; border-radius: 99px; background: #999; }
+    .b-ok{ color: #bdf8d8; border-color: rgba(43,212,125,.35); background: rgba(43,212,125,.08); }
+    .b-ok .dot{ background: var(--ok); }
+    .b-warn{ color: #ffe7b2; border-color: rgba(246,196,83,.35); background: rgba(246,196,83,.08); }
+    .b-warn .dot{ background: var(--warn); }
+    .b-danger{ color: #ffd0d9; border-color: rgba(255,92,122,.35); background: rgba(255,92,122,.08); }
+    .b-danger .dot{ background: var(--danger); }
+
+    .toolbar{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .left, .right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    label{ font-size: 12px; color: var(--muted); }
+    input[type="text"]{
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      outline:none;
+      min-width: 170px;
+    }
+    input[type="range"]{ width: 220px; }
+    .hint{ color: var(--muted); font-size: 12px; }
+
+    button{
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      transition: .15s ease;
+    }
+    button:hover{ transform: translateY(-1px); background: rgba(255,255,255,.06); }
+    button.primary{
+      border-color: rgba(122,167,255,.45);
+      background: rgba(122,167,255,.16);
+    }
+    button.danger{
+      border-color: rgba(255,92,122,.45);
+      background: rgba(255,92,122,.14);
+    }
+    button.ok{
+      border-color: rgba(43,212,125,.45);
+      background: rgba(43,212,125,.14);
+    }
+    button.ghost{ background: transparent; }
+
+    .grid{
+      display:grid;
+      gap: 12px;
+      margin-top: 12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 920px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+      .span2{ grid-column: 1 / -1; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .card h3{ margin: 2px 0 12px; font-size: 16px; letter-spacing:.2px; }
+    .sep{ height:1px; background: var(--line); margin: 12px 0; }
+
+    .kpi{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+    }
+    @media (min-width: 520px){
+      .kpi{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+    .box{
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      min-height: 86px;
+    }
+    .box .t{ color: var(--muted); font-size: 12px; }
+    .box .v{ font-size: 26px; font-weight: 750; margin-top: 4px; }
+    .box .s{ color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+    .controls{ display:grid; gap: 10px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .group{
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .group .gtitle{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px; margin-bottom: 10px;
+    }
+    .group .gtitle b{ font-size: 13px; }
+    .mini{ font-size: 12px; color: var(--muted); }
+
+    pre{
+      margin:0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      color: #cfe0ff;
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--line);
+      padding: 12px;
+      border-radius: 14px;
+      max-height: 340px;
+      overflow:auto;
+    }
+
+    .small-note{ color: var(--muted); font-size: 12px; }
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      padding: 2px 8px;
+      border-radius: 10px;
+      color: #dbe6ff;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <h1>🏥 Smart Medicine Room — ESP32 Dashboard</h1>
+        <div class="sub">ดูค่าห้องยาแบบเรียลไทม์ + คุมไฟห้อง / พัดลม 360° / ช่องยา</div>
+      </div>
+
+      <div class="pillbar">
+        <span id="badgeOnline" class="badge"><span class="dot"></span><span>Offline</span></span>
+        <span id="badgeCritical" class="badge"><span class="dot"></span><span>Normal</span></span>
+        <span id="badgeIR" class="badge"><span class="dot"></span><span>IR: -</span></span>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="left">
+        <label>device_id</label>
+        <input id="deviceId" type="text" value="esp32_1" />
+        <button class="primary" onclick="refreshData()">Refresh</button>
+        <button class="ghost" onclick="sendCmd('RELAY_AUTO','1')">กลับ Auto Light</button>
+        <span class="hint">Auto refresh: <b>2s</b></span>
+      </div>
+      <div class="right">
+        <div class="hint" id="lastUpdate">-</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- SENSOR -->
+      <div class="card">
+        <h3>📈 ค่าที่วัดล่าสุด</h3>
+        <div class="kpi">
+          <div class="box">
+            <div class="t">Temperature (°C)</div>
+            <div class="v" id="tempC">-</div>
+            <div class="s" id="tempHint">-</div>
+          </div>
+          <div class="box">
+            <div class="t">Humidity (%)</div>
+            <div class="v" id="humid">-</div>
+            <div class="s" id="humHint">-</div>
+          </div>
+          <div class="box">
+            <div class="t">IR Sensor</div>
+            <div class="v" id="irState">-</div>
+            <div class="s" id="irHint">-</div>
+          </div>
+
+          <div class="box">
+            <div class="t">People Entry</div>
+            <div class="v" id="entryToday">-</div>
+            <div class="s">วันนี้ / ทั้งหมด: <span id="entryTotal">-</span></div>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="small-note">เวลา (created_at): <span class="kbd" id="createdAt">-</span></div>
+        <div class="small-note">เกณฑ์ Critical: Temp <span class="kbd">18–28°C</span>, Hum <span class="kbd">40–60%</span></div>
+      </div>
+
+      <!-- STATE -->
+      <div class="card">
+        <h3>🔌 สถานะอุปกรณ์ (Device State)</h3>
+        <div class="kpi">
+          <div class="box">
+            <div class="t">Relay (ไฟห้อง)</div>
+            <div class="v" id="relayOn">-</div>
+            <div class="s" id="relayHint">manual/auto</div>
+          </div>
+          <div class="box">
+            <div class="t">Door Angle (MG90S)</div>
+            <div class="v" id="doorAngleNow">-</div>
+            <div class="s">0–90°</div>
+          </div>
+          <div class="box">
+            <div class="t">Fan Speed (SG90)</div>
+            <div class="v" id="fanSpeedNow">-</div>
+            <div class="s">0–180 (90=Stop)</div>
+          </div>
+          <div class="box">
+            <div class="t">Buzzer</div>
+            <div class="v" id="buzzerOn">-</div>
+            <div class="s">manual / alert</div>
+          </div>
+          <div class="box">
+            <div class="t">LED Mode</div>
+            <div class="v" id="ledMode">-</div>
+            <div class="s" id="ledHint">-</div>
+          </div>
+          <div class="box">
+            <div class="t">Mode</div>
+            <div class="v" id="modeHint">-</div>
+            <div class="s">Normal / Critical</div>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="small-note">updated_at: <span class="kbd" id="stateUpdatedAt">-</span></div>
+      </div>
+
+      <!-- CONTROL -->
+      <div class="card span2">
+        <h3>🎛️ Control</h3>
+
+        <div class="controls">
+          <!-- Relay -->
+          <div class="group">
+            <div class="gtitle">
+              <b>💡 ไฟห้อง (Relay)</b>
+              <span class="mini">คำสั่ง: RELAY / RELAY_AUTO</span>
+            </div>
+            <div class="row">
+              <button class="ok" onclick="sendCmd('RELAY','1')">Relay ON</button>
+              <button class="danger" onclick="sendCmd('RELAY','0')">Relay OFF</button>
+              <button onclick="sendCmd('RELAY_AUTO','1')">กลับ Auto Light (IR)</button>
+            </div>
+          </div>
+
+          <!-- ✅ Fan (SG90) : ตัดซ้ำออก เหลือชุดเดียว -->
+          <div class="group">
+            <div class="gtitle">
+              <b>🌀 พัดลม 360° (SG90 Continuous)</b>
+              <span class="mini">คำสั่ง: FAN (0/1) + FAN_SPEED (0–180, 90=Stop)</span>
+            </div>
+
+            <div class="row">
+              <button class="ok" onclick="fanOn()">Fan ON</button>
+              <button class="danger" onclick="fanOff()">Fan OFF</button>
+              <span class="mini">* ON จะหมุนทันที (ESP32 ตอนนี้ใช้ค่า 120)</span>
+            </div>
+
+            <div class="row">
+              <label>Speed</label>
+              <input id="fanSpeed" type="range" min="0" max="180" value="90"
+                     oninput="fanSpeedVal.textContent=this.value" />
+              <span class="kbd" id="fanSpeedVal">90</span>
+              <button class="primary"
+                      onclick="sendCmd('FAN_SPEED', document.getElementById('fanSpeed').value)">Send</button>
+            </div>
+
+            <div class="row">
+              <button onclick="presetFan(90)">Stop (90)</button>
+              <button onclick="presetFan(120)">CW (120)</button>
+              <button onclick="presetFan(60)">CCW (60)</button>
+              <span class="mini">* บางรุ่นทิศทางอาจสลับ</span>
+            </div>
+          </div>
+
+          <!-- Door (MG90S) -->
+          <div class="group">
+            <div class="gtitle">
+              <b>🧪 ช่องยา (MG90S)</b>
+              <span class="mini">คำสั่ง: DOOR (0–90)</span>
+            </div>
+            <div class="row">
+              <label>Angle</label>
+              <input id="doorAngle" type="range" min="0" max="90" value="0"
+                     oninput="doorAngleVal.textContent=this.value" />
+              <span class="kbd" id="doorAngleVal">0</span>
+              <button class="primary"
+                      onclick="sendCmd('DOOR', document.getElementById('doorAngle').value)">Send</button>
+            </div>
+            <div class="row">
+              <button class="danger" onclick="presetDoor(0)">ปิดช่องยา</button>
+              <button onclick="presetDoor(45)">เปิดครึ่ง (45)</button>
+              <button class="ok" onclick="presetDoor(90)">เปิดช่องยา</button>
+            </div>
+          </div>
+
+          <!-- LED/Buzzer -->
+          <div class="group">
+            <div class="gtitle">
+              <b>🚨 LED สถานะ + Buzzer</b>
+              <span class="mini">คำสั่ง: LED / BUZZER</span>
+            </div>
+            <div class="row">
+              <button onclick="sendCmd('LED','0')">LED Off</button>
+              <button onclick="sendCmd('LED','1')">LED On</button>
+              <button onclick="sendCmd('LED','2')">LED Blink (Critical)</button>
+              <button onclick="sendCmd('LED','4')">LED One-shot</button>
+            </div>
+            <div class="row">
+              <button onclick="sendCmd('BUZZER','1')">Buzzer ON</button>
+              <button onclick="sendCmd('BUZZER','0')">Buzzer OFF</button>
+              <span class="mini">* Critical/Entry จะมี pattern ของมันเองจาก ESP32</span>
+            </div>
+          </div>
+
+          <div class="small-note">
+            คำสั่งจะถูกบันทึกลง <span class="kbd">device_command</span> แล้วรอ ESP32 มาดึงไปทำงาน
+          </div>
+        </div>
+      </div>
+
+      <!-- DEBUG -->
+      <div class="card span2">
+        <h3>🧾 Debug JSON</h3>
+        <pre id="jsonBox">-</pre>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const TEMP_MIN = 0.0, TEMP_MAX = 30.0;
+  const HUM_MIN  = 40.0, HUM_MAX  = 80.0;
+
+  function setBadge(el, text, cls) {
+    el.className = "badge " + (cls || "");
+    el.querySelector("span:last-child").textContent = text;
+  }
+
+  function ledModeText(mode) {
+    const m = Number(mode);
+    if (m === 0) return "Off";
+    if (m === 1) return "On";
+    if (m === 2) return "Blink";
+    if (m === 4) return "One-shot";
+    return String(mode);
+  }
+
+  function safeDateFromMysql(ts) {
+    if (!ts) return null;
+    const d = new Date(String(ts).replace(" ", "T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function fmtNum(x, digits=1){
+    const n = Number(x);
+    if (!isFinite(n)) return "-";
+    return n.toFixed(digits);
+  }
+
+  function presetFan(v){
+    const r = document.getElementById("fanSpeed");
+    r.value = v;
+    document.getElementById("fanSpeedVal").textContent = v;
+    sendCmd("FAN_SPEED", String(v));
+  }
+
+  function presetDoor(v){
+    const r = document.getElementById("doorAngle");
+    r.value = v;
+    document.getElementById("doorAngleVal").textContent = v;
+    sendCmd("DOOR", String(v));
+  }
+
+  // ✅ เพิ่มให้ครบ: ปุ่ม Fan ON/OFF
+  function fanOn(){
+    sendCmd("FAN", "1");
+    const r = document.getElementById("fanSpeed");
+    if (r) {
+      r.value = 120;
+      document.getElementById("fanSpeedVal").textContent = "120";
+    }
+  }
+
+  function fanOff(){
+    sendCmd("FAN", "0");
+    const r = document.getElementById("fanSpeed");
+    if (r) {
+      r.value = 90;
+      document.getElementById("fanSpeedVal").textContent = "90";
+    }
+  }
+
+  async function refreshData() {
+    const deviceId = document.getElementById('deviceId').value.trim();
+    const lastUpdate = document.getElementById('lastUpdate');
+
+    const badgeOnline   = document.getElementById('badgeOnline');
+    const badgeCritical = document.getElementById('badgeCritical');
+    const badgeIR       = document.getElementById('badgeIR');
+
+    try {
+      setBadge(badgeOnline, "Loading...", "b-warn");
+      const res = await fetch(`../api/latest.php?device_id=${encodeURIComponent(deviceId)}`);
+      const data = await res.json();
+
+      document.getElementById('jsonBox').textContent = JSON.stringify(data, null, 2);
+
+      if (!data.ok) {
+        setBadge(badgeOnline, "API Error", "b-danger");
+        lastUpdate.textContent = "ไม่สามารถดึงข้อมูลได้";
+        return;
+      }
+
+      document.getElementById("entryToday").textContent = data?.entry?.today ?? "-";
+      document.getElementById("entryTotal").textContent = data?.entry?.total ?? "-";
+
+      const ts = (data?.latest?.created_at || data?.state?.updated_at || "").toString();
+      const last = safeDateFromMysql(ts);
+
+      let online = false;
+      let diffSec = null;
+      if (last) {
+        diffSec = Math.floor((Date.now() - last.getTime()) / 1000);
+        online = diffSec <= 12;
+      }
+      if (online) setBadge(badgeOnline, "Online", "b-ok");
+      else setBadge(badgeOnline, "Offline", "b-danger");
+
+      if (ts && diffSec != null) lastUpdate.textContent = `last_seen: ${ts} (${diffSec}s ago)`;
+      else lastUpdate.textContent = "ยังไม่มีข้อมูลจาก ESP32 (sensor_log ยังว่าง)";
+
+      const latest = data.latest || null;
+      let t = NaN, h = NaN, ir = 0;
+
+      if (latest) {
+        t = Number(latest.temp_c);
+        h = Number(latest.humid);
+        ir = Number(latest.ir_state ?? 0);
+
+        document.getElementById('tempC').textContent = isFinite(t) ? fmtNum(t,1) : "-";
+        document.getElementById('humid').textContent = isFinite(h) ? fmtNum(h,1) : "-";
+
+        document.getElementById('irState').textContent = ir ? "DETECT" : "CLEAR";
+        document.getElementById('irHint').textContent = ir ? "มีการตรวจจับ (มีคนเข้า/เปิดประตู)" : "ไม่ตรวจจับ";
+        document.getElementById('createdAt').textContent = latest.created_at ?? "-";
+
+        setBadge(badgeIR, ir ? "IR: DETECT" : "IR: CLEAR", ir ? "b-warn" : "b-ok");
+      } else {
+        document.getElementById('tempC').textContent = "-";
+        document.getElementById('humid').textContent = "-";
+        document.getElementById('irState').textContent = "-";
+        document.getElementById('irHint').textContent = "-";
+        document.getElementById('createdAt').textContent = "-";
+        setBadge(badgeIR, "IR: -", "");
+      }
+
+      const tempBad = isFinite(t) ? (t < TEMP_MIN || t > TEMP_MAX) : false;
+      const humBad  = isFinite(h) ? (h < HUM_MIN  || h > HUM_MAX) : false;
+      const critical = tempBad || humBad;
+
+      document.getElementById('tempHint').textContent =
+        isFinite(t) ? (tempBad ? `ผิดปกติ (เกณฑ์ ${TEMP_MIN}–${TEMP_MAX})` : `ปกติ (เกณฑ์ ${TEMP_MIN}–${TEMP_MAX})`) : "-";
+      document.getElementById('humHint').textContent =
+        isFinite(h) ? (humBad ? `ผิดปกติ (เกณฑ์ ${HUM_MIN}–${HUM_MAX})` : `ปกติ (เกณฑ์ ${HUM_MIN}–${HUM_MAX})`) : "-";
+
+      setBadge(badgeCritical, critical ? "CRITICAL" : "Normal", critical ? "b-danger" : "b-ok");
+      document.getElementById('modeHint').textContent = critical ? "CRITICAL" : "Normal";
+
+      const state = data.state || null;
+
+      if (state) {
+        document.getElementById('relayOn').textContent = Number(state.relay_on ?? 0) ? "ON" : "OFF";
+        document.getElementById('buzzerOn').textContent = Number(state.buzzer_on ?? 0) ? "ON" : "OFF";
+
+        const lm = state.led_mode ?? 0;
+        document.getElementById('ledMode').textContent = ledModeText(lm);
+        document.getElementById('ledHint').textContent = "mode = " + lm;
+
+        const fanSpeed = (state.fan_speed ?? state.servo_angle ?? null);
+        const doorAng  = (state.door_angle ?? null);
+
+        document.getElementById('fanSpeedNow').textContent = (fanSpeed === null || fanSpeed === undefined) ? "-" : String(fanSpeed);
+        document.getElementById('doorAngleNow').textContent = (doorAng === null || doorAng === undefined) ? "-" : String(doorAng);
+
+        document.getElementById('stateUpdatedAt').textContent = state.updated_at ?? "-";
+      } else {
+        document.getElementById('relayOn').textContent = "-";
+        document.getElementById('buzzerOn').textContent = "-";
+        document.getElementById('ledMode').textContent = "-";
+        document.getElementById('ledHint').textContent = "-";
+        document.getElementById('fanSpeedNow').textContent = "-";
+        document.getElementById('doorAngleNow').textContent = "-";
+        document.getElementById('stateUpdatedAt').textContent = "-";
+      }
+
+    } catch (e) {
+      setBadge(document.getElementById('badgeOnline'), "Offline", "b-danger");
+      document.getElementById('lastUpdate').textContent = "ดึงข้อมูลไม่ได้: " + (e?.message || e);
+    }
+  }
+
+  async function sendCmd(cmd, value) {
+    const deviceId = document.getElementById('deviceId').value.trim();
+    const form = new URLSearchParams();
+    form.append('device_id', deviceId);
+    form.append('cmd', cmd);
+    form.append('value', value);
+
+    const res = await fetch('../api/cmd_set.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: form.toString() 
+    });
+    const data = await res.json();
+
+    console.log("CMD SENT:", data);
+    refreshData();
+  }
+
+  setInterval(refreshData, 2000);
+  refreshData();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# system
+.DS_Store
+Thumbs.db
+
+# xampp
+*.log
+
+# secrets
+secrets.h
+.env
+
+# editor
+.vscode/
