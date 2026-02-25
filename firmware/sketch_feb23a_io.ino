@@ -25,7 +25,6 @@ String BASE_URL = "http://172.20.10.4/iot/api";
 String deviceId = "esp32_1";
 
 // ================== ✅ SECURITY (เพิ่มใหม่) ==================
-// เปลี่ยนค่า 2 ตัวนี้ให้ตรงกับฝั่ง PHP
 String API_KEY      = "FIRST_IOT_2026_SECRET";
 String DEVICE_TOKEN = "ESP32_ROOM_A_TOKEN_999";
 
@@ -126,12 +125,8 @@ void runFanSwing() {
 }
 
 // ================== WIFI MANAGER (ไม่ฝัง SSID/PASS) ==================
-String prefGet(const char* key, const String& def) {
-  return prefs.getString(key, def);
-}
-void prefSet(const char* key, const String& val) {
-  prefs.putString(key, val);
-}
+String prefGet(const char* key, const String& def) { return prefs.getString(key, def); }
+void prefSet(const char* key, const String& val) { prefs.putString(key, val); }
 
 void setupLocalEndpoints() {
   localServer.on("/", []() {
@@ -147,10 +142,10 @@ void setupLocalEndpoints() {
     localServer.send(200, "text/plain", "Resetting WiFi settings...");
 
     WiFiManager wm;
-    wm.resetSettings(); // ล้าง SSID/PASS ที่บันทึกไว้
+    wm.resetSettings();
 
     prefs.begin("cfg", false);
-    prefs.clear();      // ล้าง base_url/device_id ที่เก็บเอง
+    prefs.clear();
     prefs.end();
 
     delay(800);
@@ -163,14 +158,13 @@ void setupLocalEndpoints() {
 void setupWiFiNoHardcode() {
   WiFi.mode(WIFI_STA);
 
-  // โหลดค่า BASE_URL / deviceId ที่เคยตั้งไว้
   prefs.begin("cfg", true);
   BASE_URL = prefGet("base_url", BASE_URL);
   deviceId = prefGet("device_id", deviceId);
   prefs.end();
 
   WiFiManager wm;
-  wm.setConfigPortalTimeout(180); // 3 นาที
+  wm.setConfigPortalTimeout(180);
   wm.setConnectTimeout(20);
 
   char baseBuf[160];
@@ -184,9 +178,7 @@ void setupWiFiNoHardcode() {
   wm.addParameter(&p_id);
 
   bool ok = wm.autoConnect("IOT-SETUP");
-  if (!ok) {
-    ESP.restart();
-  }
+  if (!ok) ESP.restart();
 
   BASE_URL = String(p_base.getValue());
   deviceId = String(p_id.getValue());
@@ -212,7 +204,7 @@ void telegramNotify(const String& type, float t, float h) {
 
   http.begin(url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  addSecurityHeaders(http); // ✅ เพิ่มใหม่
+  addSecurityHeaders(http);
 
   String body = "device_id=" + deviceId +
                 "&temp_c=" + String(t, 1) +
@@ -348,7 +340,7 @@ void sendSensor() {
   String url = BASE_URL + "/sensor_push.php";
   http.begin(url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  addSecurityHeaders(http); // ✅ เพิ่มใหม่
+  addSecurityHeaders(http);
 
   String body = "device_id=" + deviceId +
                 "&temp_c=" + String(t, 1) +
@@ -370,7 +362,7 @@ void cmdDone(int id, String cmd, String value) {
   String url = BASE_URL + "/cmd_done.php";
   http.begin(url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  addSecurityHeaders(http); // ✅ เพิ่มใหม่
+  addSecurityHeaders(http);
 
   String body = "id=" + String(id) +
                 "&device_id=" + deviceId +
@@ -446,8 +438,6 @@ void fetchCommand() {
   HTTPClient http;
   http.setTimeout(4000);
   http.begin(url);
-
-  // ✅ สำคัญ: GET ก็ต้องใส่ header ได้เหมือนกัน
   addSecurityHeaders(http);
 
   int code = http.GET();
@@ -474,7 +464,7 @@ void fetchCommand() {
   cmdDone(id, cmd, value);
 }
 
-// ================== ENTRY ==================
+// ================== ENTRY (ยังใช้เพื่อ People Entry วันนี้/ทั้งหมด) ==================
 void pushEntryEvent() {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -482,7 +472,7 @@ void pushEntryEvent() {
   String url = BASE_URL + "/entry_push.php";
   http.begin(url);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  addSecurityHeaders(http); // ✅ เพิ่มใหม่
+  addSecurityHeaders(http);
 
   String body = "device_id=" + deviceId;
 
@@ -527,10 +517,7 @@ void setup() {
 
   dht.begin();
 
-  // ✅ Wi-Fi แบบไม่ฝัง SSID/Password
   setupWiFiNoHardcode();
-
-  // ✅ local web สำหรับดูสถานะ/รีเซ็ตไวไฟ
   setupLocalEndpoints();
 
   prevIrRaw = digitalRead(IR_PIN);
@@ -539,7 +526,6 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // ✅ ให้เว็บ /resetwifi ใช้งานได้
   localServer.handleClient();
 
   // ===== IR entry detect: แจ้งทันทีเมื่อมีคนเข้า (HIGH->LOW) =====
@@ -550,6 +536,7 @@ void loop() {
   if (irEdgeDetected && (millis() - tEntryNotify > ENTRY_COOLDOWN)) {
     tEntryNotify = millis();
 
+    // ✅ (ตัดแล้ว) ไม่ส่ง ir_event_add.php อีก
     triggerEntryAlert();
     pushEntryEvent();
 
@@ -573,7 +560,6 @@ void loop() {
   if (now - tSend >= 5000) { tSend = now; sendSensor(); }
   if (now - tCmd  >= 1000) { tCmd  = now; fetchCommand(); }
 
-  // ===== fan swing =====
   runFanSwing();
 
   // ===== door update (only when changed) =====
