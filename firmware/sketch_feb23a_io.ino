@@ -41,6 +41,11 @@ Servo doorServo;
 // ================== LOCAL WEB (reset wifi) ==================
 Preferences prefs;
 WebServer localServer(80);
+// ================== WIFI PORTAL (remote) ==================
+WiFiManager wm;                  // ใช้ตัวเดียวทั้งโปรแกรม (สำคัญ)
+bool portalActive = false;
+unsigned long portalStartMs = 0;
+const unsigned long PORTAL_TIMEOUT_MS = 180000; // 3 นาที
 
 // ================== TIMERS ==================
 unsigned long tSend = 0;
@@ -158,15 +163,16 @@ void setupLocalEndpoints() {
 void setupWiFiNoHardcode() {
   WiFi.mode(WIFI_STA);
 
+  // โหลดค่าเดิม (base_url/device_id) จาก NVS
   prefs.begin("cfg", true);
   BASE_URL = prefGet("base_url", BASE_URL);
   deviceId = prefGet("device_id", deviceId);
   prefs.end();
 
-  WiFiManager wm;
   wm.setConfigPortalTimeout(180);
   wm.setConnectTimeout(20);
 
+  // ทำพารามิเตอร์ config
   char baseBuf[160];
   char idBuf[40];
   BASE_URL.toCharArray(baseBuf, sizeof(baseBuf));
@@ -174,12 +180,24 @@ void setupWiFiNoHardcode() {
 
   WiFiManagerParameter p_base("base", "BASE_URL (API)", baseBuf, 160);
   WiFiManagerParameter p_id("devid", "deviceId", idBuf, 40);
+
   wm.addParameter(&p_base);
   wm.addParameter(&p_id);
 
-  bool ok = wm.autoConnect("IOT-SETUP");
-  if (!ok) ESP.restart();
+  // ✅ ตอนบูต: ใช้ BLOCKING MODE ให้ต่อ WiFi ให้ได้ก่อน
+  wm.setConfigPortalBlocking(true);
 
+  bool ok = wm.autoConnect("SMR-ESP32-SETUP");
+  if (!ok) {
+    Serial.println("[WiFi] Failed to connect -> restart");
+    delay(1000);
+    ESP.restart();
+  }
+
+  Serial.println("[WiFi] Connected!");
+  Serial.println("IP: " + WiFi.localIP().toString());
+
+  // เก็บค่าที่กรอกจาก portal
   BASE_URL = String(p_base.getValue());
   deviceId = String(p_id.getValue());
 
@@ -187,8 +205,6 @@ void setupWiFiNoHardcode() {
   prefSet("base_url", BASE_URL);
   prefSet("device_id", deviceId);
   prefs.end();
-
-  Serial.println("WiFi OK: " + WiFi.localIP().toString());
 }
 
 // ================== TELEGRAM ==================
@@ -427,6 +443,45 @@ void applyCommand(String cmd, String value) {
     doorServo.write(doorTarget);
     return;
   }
+  // ================== WIFI PORTAL (remote) ==================
+    // ================== WIFI PORTAL (remote) ==================
+  if (cmd == "WIFI_PORTAL") {
+    if (!portalActive) {
+      portalActive = true;
+      portalStartMs = millis();
+
+      // เปิด portal แบบ non-blocking (ต้องมี wm.process() ใน loop)
+      wm.setConfigPortalBlocking(false);
+      wm.setConfigPortalTimeout(180);
+
+      bool started = wm.startConfigPortal("SMR-ESP32-SETUP");
+      Serial.println(started ? "[WIFI] Portal started: SMR-ESP32-SETUP"
+                             : "[WIFI] Portal start failed");
+
+      // หมายเหตุ: ตอน portal ทำงาน ESP จะเป็น AP/STA สลับได้
+      // ถ้า API จะยิงไม่ได้ในช่วงนี้เป็นเรื่องปกติ เพราะมันอาจหลุดจาก WiFi เดิม
+    } else {
+      Serial.println("[WIFI] Portal already active");
+    }
+    return;
+  }
+
+  if (cmd == "WIFI_RESET") {
+    Serial.println("[WIFI] Reset settings + restart");
+
+    // ถ้า portal ค้างอยู่ ปิดก่อน
+    wm.stopConfigPortal();
+
+    wm.resetSettings();     // ล้าง SSID/PASS
+
+    prefs.begin("cfg", false);
+    prefs.clear();          // ล้าง base_url/device_id
+    prefs.end();
+
+    delay(800);
+    ESP.restart();
+    return;
+  }
 }
 
 // ================== FETCH COMMAND ==================
@@ -482,7 +537,21 @@ void pushEntryEvent() {
 
   Serial.println("[pushEntryEvent] code=" + String(code) + " resp=" + resp);
 }
+void ensureWiFiConnected() {
+  if (WiFi.status() == WL_CONNECTED) return;
 
+  Serial.println("[WiFi] reconnecting...");
+  WiFi.mode(WIFI_STA);
+  WiFi.reconnect();
+
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {
+    delay(200);
+  }
+
+  Serial.println("[WiFi] status=" + String((int)WiFi.status()) +
+                 " ip=" + WiFi.localIP().toString());
+}
 // ================== SETUP / LOOP ==================
 void setup() {
   Serial.begin(115200);
@@ -527,7 +596,22 @@ void loop() {
   unsigned long now = millis();
 
   localServer.handleClient();
+  // ===== WiFiManager process (ทำให้ portal ทำงานได้) =====
+  wm.process();
+if (portalActive && WiFi.status() == WL_CONNECTED) {
+  portalActive = false;
+  Serial.println("[WIFI] Portal finished, back online");
+}
+  
 
+  if (portalActive) {
+    // ถ้าหมดเวลา ให้รีสตาร์ท (กัน portal ค้าง)
+    if (millis() - portalStartMs > PORTAL_TIMEOUT_MS) {
+      Serial.println("[WIFI] Portal timeout -> restart");
+      portalActive = false;
+      ESP.restart();
+    }
+  }
   // ===== IR entry detect: แจ้งทันทีเมื่อมีคนเข้า (HIGH->LOW) =====
   int irRaw = digitalRead(IR_PIN);
   bool irEdgeDetected = (prevIrRaw == HIGH && irRaw == LOW);
