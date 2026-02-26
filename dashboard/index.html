@@ -4,199 +4,544 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>ESP32 Smart Medicine Room Dashboard</title>
+
+  <!-- Game-ish fonts (ถ้าเน็ตมีจะสวยขึ้น) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
   <style>
-    :root{
-      --bg:#0b1220;
-      --text:#e9eefc;
-      --muted:#a8b3d6;
-      --line:rgba(255,255,255,.08);
-      --ok:#2bd47d;
-      --warn:#f6c453;
-      --danger:#ff5c7a;
-      --shadow: 0 14px 40px rgba(0,0,0,.35);
-      --radius:16px;
-    }
-    * { box-sizing: border-box; }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: radial-gradient(1200px 600px at 20% -10%, rgba(122,167,255,.22), transparent 60%),
-                  radial-gradient(900px 500px at 100% 0%, rgba(43,212,125,.18), transparent 55%),
-                  radial-gradient(900px 600px at 30% 100%, rgba(255,92,122,.12), transparent 55%),
-                  var(--bg);
-      color: var(--text);
-    }
-    .wrap{ max-width: 1100px; margin: 18px auto; padding: 0 14px 40px; }
-    header{
-      display:flex; gap:14px; align-items:flex-end; justify-content:space-between;
-      margin: 6px 0 16px;
-    }
-    .title h1{ margin:0; font-size: 22px; letter-spacing:.2px; }
-    .title .sub{ margin-top:6px; color: var(--muted); font-size:13px; }
-    .pillbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .badge{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.03);
-      font-size: 12px;
-      color: var(--muted);
-      user-select:none;
-    }
-    .dot{ width:8px; height:8px; border-radius: 99px; background: #999; }
-    .b-ok{ color: #bdf8d8; border-color: rgba(43,212,125,.35); background: rgba(43,212,125,.08); }
-    .b-ok .dot{ background: var(--ok); }
-    .b-warn{ color: #ffe7b2; border-color: rgba(246,196,83,.35); background: rgba(246,196,83,.08); }
-    .b-warn .dot{ background: var(--warn); }
-    .b-danger{ color: #ffd0d9; border-color: rgba(255,92,122,.35); background: rgba(255,92,122,.08); }
-    .b-danger .dot{ background: var(--danger); }
+    /* ===== Custom Cursor ===== */
+body{ cursor: none; }               /* ซ่อน cursor เดิม */
+a, button, input, select, label { cursor: none; }
 
-    .toolbar{
-      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 14px;
-      box-shadow: var(--shadow);
-    }
-    .left, .right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    label{ font-size: 12px; color: var(--muted); }
-    input[type="text"]{
-      background: rgba(255,255,255,.04);
-      border: 1px solid var(--line);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-      outline:none;
-      min-width: 170px;
-    }
-    input[type="range"]{ width: 220px; }
-    .hint{ color: var(--muted); font-size: 12px; }
+.cursorDot, .cursorRing{
+  position: fixed;
+  left: 0; top: 0;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+}
 
-    button{
-      background: rgba(255,255,255,.04);
-      border: 1px solid var(--line);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-      cursor:pointer;
-      transition: .15s ease;
-    }
-    button:hover{ transform: translateY(-1px); background: rgba(255,255,255,.06); }
-    button.primary{
-      border-color: rgba(122,167,255,.45);
-      background: rgba(122,167,255,.16);
-    }
-    button.danger{
-      border-color: rgba(255,92,122,.45);
-      background: rgba(255,92,122,.14);
-    }
-    button.ok{
-      border-color: rgba(43,212,125,.45);
-      background: rgba(43,212,125,.14);
-    }
-    button.ghost{ background: transparent; }
+.cursorDot{
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: rgba(122,167,255,.95);
+  box-shadow: 0 0 18px rgba(122,167,255,.65);
+}
 
-    .grid{
-      display:grid;
-      gap: 12px;
-      margin-top: 12px;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 920px){
-      .grid{ grid-template-columns: 1fr 1fr; }
-      .span2{ grid-column: 1 / -1; }
-    }
+.cursorRing{
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(122,167,255,.55);
+  box-shadow:
+    0 0 22px rgba(122,167,255,.25),
+    inset 0 0 18px rgba(122,167,255,.10);
+  backdrop-filter: blur(2px);
+  transition:
+    width .12s ease, height .12s ease,
+    border-color .12s ease, transform .12s ease,
+    box-shadow .12s ease;
+  opacity: .95;
+}
 
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 14px;
-      box-shadow: var(--shadow);
-    }
-    .card h3{ margin: 2px 0 12px; font-size: 16px; letter-spacing:.2px; }
-    .sep{ height:1px; background: var(--line); margin: 12px 0; }
+/* Hover state (เวลาชี้ปุ่ม/ลิงก์) */
+.cursorRing.isHover{
+  width: 44px; height: 44px;
+  border-color: rgba(43,212,125,.70);
+  box-shadow:
+    0 0 26px rgba(43,212,125,.22),
+    inset 0 0 18px rgba(43,212,125,.10);
+}
 
-    .kpi{
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0,1fr));
-      gap: 10px;
-    }
-    @media (min-width: 520px){
-      .kpi{ grid-template-columns: repeat(3, minmax(0,1fr)); }
-    }
-    .box{
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-      min-height: 86px;
-    }
-    .box .t{ color: var(--muted); font-size: 12px; }
-    .box .v{ font-size: 26px; font-weight: 750; margin-top: 4px; }
-    .box .s{ color: var(--muted); font-size: 12px; margin-top: 4px; }
+.cursorDot.isHover{
+  background: rgba(43,212,125,.95);
+  box-shadow: 0 0 18px rgba(43,212,125,.55);
+}
 
-    .controls{ display:grid; gap: 10px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .group{
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-    }
-    .group .gtitle{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:10px; margin-bottom: 10px;
-    }
-    .group .gtitle b{ font-size: 13px; }
-    .mini{ font-size: 12px; color: var(--muted); }
+/* Click pulse */
+.cursorRing.isDown{
+  transform: translate(-50%, -50%) scale(.88);
+  border-color: rgba(255,92,122,.80);
+  box-shadow:
+    0 0 30px rgba(255,92,122,.22),
+    inset 0 0 18px rgba(255,92,122,.10);
+}
+.cursorDot.isDown{
+  background: rgba(255,92,122,.95);
+  box-shadow: 0 0 18px rgba(255,92,122,.55);
+}
 
-    pre{
-      margin:0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      color: #cfe0ff;
-      background: rgba(0,0,0,.25);
-      border: 1px solid var(--line);
-      padding: 12px;
-      border-radius: 14px;
-      max-height: 340px;
-      overflow:auto;
-    }
+/* มือถือ/แท็บเล็ตไม่ต้องโชว์ */
+@media (pointer: coarse){
+  body{ cursor: auto; }
+  .cursorDot, .cursorRing{ display:none; }
+}
+  :root{
+    /* ===== Login Theme (Blue Terminal) ===== */
+    --bg0:#060a16;
+    --bg1:#050816;
 
-    .small-note{ color: var(--muted); font-size: 12px; }
-    .kbd{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.04);
-      padding: 2px 8px;
-      border-radius: 10px;
-      color: #dbe6ff;
-      font-size: 12px;
-    }
-  </style>
+    --text:#eaf1ff;
+    --muted:#aebcda;
+
+    --accent:#4da3ff;
+    --accent2:#7fb8ff;
+
+    --line: rgba(77,163,255,.26);
+    --line2: rgba(255,255,255,.08);
+
+    --panel: rgba(10,14,28,.62);
+    --panel2: rgba(0,0,0,.32);
+
+    --shadow: 0 18px 70px rgba(0,0,0,.62);
+    --radius:18px;
+  }
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    color: var(--text);
+    background:
+      radial-gradient(900px 520px at 20% 0%, rgba(77,163,255,.22), transparent 60%),
+      radial-gradient(900px 560px at 95% 10%, rgba(77,163,255,.14), transparent 62%),
+      radial-gradient(1100px 700px at 50% 120%, rgba(77,163,255,.10), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.02), transparent 38%),
+      var(--bg1);
+    overflow-x:hidden;
+  }
+
+  /* Scanline แบบหน้า login */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,.05) 0px,
+      rgba(255,255,255,.05) 1px,
+      transparent 2px,
+      transparent 6px
+    );
+    opacity:.08;
+    pointer-events:none;
+    mix-blend-mode: overlay;
+  }
+
+  .wrap{ max-width: 1180px; margin: 18px auto; padding: 0 14px 40px; }
+
+  /* ===== Typography ===== */
+  .title h1{
+    margin:0;
+    font-size: 22px;
+    letter-spacing: .9px;
+    font-family: Orbitron, system-ui;
+    text-transform: uppercase;
+    text-shadow: 0 0 24px rgba(77,163,255,.25);
+  }
+  .pixel{
+    font-family: "Press Start 2P", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+  }
+
+  header{
+    display:flex; gap:14px; align-items:flex-end; justify-content:space-between;
+    margin: 8px 0 14px;
+  }
+
+  /* ===== Tabs (ให้เหมือนปุ่มขอบน้ำเงิน) ===== */
+  .tabs{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+  .tab{
+    border:1px solid var(--line);
+    background: rgba(10,14,28,.45);
+    color: var(--muted);
+    padding: 10px 12px;
+    border-radius: 999px;
+    cursor:pointer;
+    transition:.15s ease;
+    display:inline-flex; align-items:center; gap:8px;
+    user-select:none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.12) inset;
+  }
+  .tab:hover{ transform: translateY(-1px); background: rgba(10,14,28,.62); }
+  .tab.active{
+    color: var(--text);
+    border-color: rgba(77,163,255,.65);
+    background: rgba(77,163,255,.12);
+    box-shadow:
+      0 0 0 2px rgba(77,163,255,.10),
+      0 0 32px rgba(77,163,255,.16);
+  }
+
+  /* ===== Badges (น้ำเงินแนวเดียว) ===== */
+  .pillbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+  .badge{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(10,14,28,.55);
+    font-size: 12px;
+    color: var(--muted);
+    user-select:none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.16) inset;
+  }
+  .dot{ width:8px; height:8px; border-radius: 99px; background: #6f7a95; }
+
+  /* ใช้สีเดียวเป็นหลัก แต่แยกสถานะด้วยความเข้ม */
+  .b-ok{
+    color: #d8ecff;
+    border-color: rgba(77,163,255,.55);
+    background: rgba(77,163,255,.10);
+  }
+  .b-ok .dot{
+    background: var(--accent);
+    box-shadow: 0 0 12px rgba(77,163,255,.55);
+  }
+  .b-warn{
+    color: #eaf1ff;
+    border-color: rgba(127,184,255,.55);
+    background: rgba(127,184,255,.10);
+  }
+  .b-warn .dot{
+    background: var(--accent2);
+    box-shadow: 0 0 12px rgba(127,184,255,.50);
+  }
+  .b-danger{
+    color: #f2f6ff;
+    border-color: rgba(77,163,255,.35);
+    background: rgba(0,0,0,.28);
+  }
+  .b-danger .dot{
+    background: #8ea1c7;
+    box-shadow: 0 0 10px rgba(77,163,255,.25);
+  }
+
+  /* ===== Inputs / Buttons ===== */
+  label{ font-size: 12px; color: var(--muted); }
+
+  input[type="text"], select{
+    background: rgba(0,0,0,.22);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 999px;
+    outline:none;
+    min-width: 170px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.22) inset;
+  }
+
+  input[type="range"]{ width: 220px; }
+  .hint{ color: var(--muted); font-size: 12px; }
+
+  button{
+    background: rgba(0,0,0,.18);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 999px;
+    cursor:pointer;
+    transition: .15s ease;
+    position:relative;
+    z-index:1;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.22) inset;
+  }
+  button:hover{ transform: translateY(-1px); background: rgba(0,0,0,.26); }
+
+  /* ปุ่ม main แบบหน้า login */
+  button.primary{
+    border-color: rgba(77,163,255,.70);
+    background: rgba(77,163,255,.16);
+    box-shadow:
+      0 0 0 1px rgba(77,163,255,.18) inset,
+      0 0 28px rgba(77,163,255,.14);
+  }
+  button.ok{
+    border-color: rgba(77,163,255,.60);
+    background: rgba(77,163,255,.12);
+  }
+  button.danger{
+    border-color: rgba(77,163,255,.45);
+    background: rgba(0,0,0,.22);
+  }
+  button.ghost{ background: transparent; }
+
+  /* ===== Layout ===== */
+  .grid{
+    display:grid;
+    gap: 12px;
+    margin-top: 12px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 920px){
+    .grid{ grid-template-columns: 1fr 1fr; }
+    .span2{ grid-column: 1 / -1; }
+  }
+
+  /* ===== Toolbar / Card แบบ “Terminal Panel” ===== */
+  .toolbar, .card{
+    background: linear-gradient(180deg, rgba(10,14,28,.70), rgba(0,0,0,.25));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    position:relative;
+    overflow:hidden;
+  }
+
+  .toolbar{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    padding: 14px;
+  }
+
+  /* Glow ขอบเหมือน login */
+  .toolbar::before, .card::before{
+    content:"";
+    position:absolute; inset:-2px;
+    background:
+      radial-gradient(700px 150px at 20% 0%, rgba(77,163,255,.18), transparent 60%),
+      radial-gradient(700px 150px at 80% 100%, rgba(77,163,255,.12), transparent 60%);
+    pointer-events:none;
+  }
+  .toolbar::after, .card::after{
+    content:"";
+    position:absolute; inset:0;
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: inherit;
+    pointer-events:none;
+    mix-blend-mode: overlay;
+  }
+
+  .left, .right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; z-index:1; }
+
+  .card{ padding: 14px; }
+
+  .card h3{
+    margin: 2px 0 12px;
+    font-size: 14px;
+    letter-spacing:.6px;
+    font-family: Orbitron, system-ui;
+    text-transform: uppercase;
+    z-index:1;
+    position:relative;
+    color: #eaf1ff;
+    text-shadow: 0 0 18px rgba(77,163,255,.18);
+  }
+
+  .sep{ height:1px; background: rgba(77,163,255,.16); margin: 12px 0; }
+
+  .kpi{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+    position:relative;
+    z-index:1;
+  }
+  @media (min-width: 520px){
+    .kpi{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+  }
+
+  .box{
+    background: rgba(0,0,0,.22);
+    border: 1px solid rgba(77,163,255,.18);
+    border-radius: 16px;
+    padding: 12px;
+    min-height: 86px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.22) inset;
+  }
+  .box .t{ color: var(--muted); font-size: 12px; }
+  .box .v{
+    font-size: 26px; font-weight: 780; margin-top: 4px;
+    text-shadow: 0 0 18px rgba(77,163,255,.18);
+  }
+  .box .s{ color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .controls{ display:grid; gap: 10px; position:relative; z-index:1; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  .group{
+    background: rgba(0,0,0,.18);
+    border: 1px solid rgba(77,163,255,.18);
+    border-radius: 16px;
+    padding: 12px;
+  }
+  .group .gtitle{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px; margin-bottom: 10px;
+  }
+  .group .gtitle b{ font-size: 13px; letter-spacing:.2px; }
+  .mini{ font-size: 12px; color: var(--muted); }
+
+  pre{
+    margin:0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    color: #cfe0ff;
+    background: rgba(0,0,0,.38);
+    border: 1px solid rgba(77,163,255,.18);
+    padding: 12px;
+    border-radius: 16px;
+    max-height: 340px;
+    overflow:auto;
+    position:relative;
+    z-index:1;
+  }
+
+  .small-note{ color: var(--muted); font-size: 12px; position:relative; z-index:1; }
+  .kbd{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    border: 1px solid rgba(77,163,255,.22);
+    background: rgba(0,0,0,.22);
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: #dbe6ff;
+    font-size: 12px;
+  }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .chartWrap{
+    background: rgba(0,0,0,.24);
+    border: 1px solid rgba(77,163,255,.18);
+    border-radius: 16px;
+    padding: 12px;
+  }
+  canvas{ max-width:100%; }
+  /* ===== Motion/FX Layer ===== */
+.fx{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0; /* อยู่หลัง content */
+}
+
+/* grid ที่เลื่อนเบาๆ */
+.fx-grid{
+  opacity: .18;
+  background:
+    linear-gradient(to right, rgba(77,163,255,.10) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(77,163,255,.10) 1px, transparent 1px);
+  background-size: 64px 64px;
+  transform: translate3d(var(--mx,0px), var(--my,0px), 0);
+  filter: drop-shadow(0 0 12px rgba(77,163,255,.10));
+  mask-image: radial-gradient(circle at 50% 40%, rgba(0,0,0,1), rgba(0,0,0,.12) 60%, rgba(0,0,0,0) 78%);
+}
+
+/* glow วงใหญ่ที่ขยับตามเมาส์ */
+.fx-glow{
+  opacity: .9;
+  background:
+    radial-gradient(520px 360px at var(--px,50%) var(--py,35%),
+      rgba(77,163,255,.22), transparent 60%),
+    radial-gradient(360px 260px at calc(var(--px,50%) + 10%) calc(var(--py,35%) + 25%),
+      rgba(77,163,255,.14), transparent 65%);
+  filter: blur(2px);
+}
+
+/* noise เบาๆ */
+.fx-noise{
+  opacity:.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* ให้ content อยู่เหนือ fx */
+.wrap{ position: relative; z-index: 1; }
+
+/* card/toolbar hover glow + border sweep */
+.card, .toolbar, .group, .box{
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.card:hover, .toolbar:hover{
+  box-shadow: 0 18px 80px rgba(0,0,0,.66), 0 0 42px rgba(77,163,255,.12);
+  border-color: rgba(77,163,255,.55);
+}
+
+/* scanline ที่ขยับ */
+body::after{
+  content:"";
+  position: fixed; inset:0;
+  pointer-events:none;
+  z-index: 0;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(77,163,255,.06) 50%,
+    transparent 100%);
+  height: 220px;
+  transform: translateY(-240px);
+  animation: scanMove 6s linear infinite;
+  opacity:.35;
+  mix-blend-mode: screen;
+}
+@keyframes scanMove{
+  0%   { transform: translateY(-240px); }
+  100% { transform: translateY(calc(100vh + 240px)); }
+}
+
+/* glitch เล็กๆ ให้หัวข้อ (เปิด/ปิดได้) */
+.title h1{
+  position: relative;
+}
+.title h1::before,
+.title h1::after{
+  content: attr(data-text);
+  position:absolute; left:0; top:0;
+  width:100%;
+  opacity:.12;
+  pointer-events:none;
+}
+.title h1::before{
+  transform: translate(1px, -1px);
+  clip-path: inset(0 0 55% 0);
+}
+.title h1::after{
+  transform: translate(-1px, 1px);
+  clip-path: inset(55% 0 0 0);
+}
+
+</style>
 </head>
 
 <body>
+<!-- Custom Cursor -->
+<div class="cursorDot" id="cursorDot"></div>
+<div class="cursorRing" id="cursorRing"></div>
+<div class="fx fx-grid"></div>
+<div class="fx fx-glow"></div>
+<div class="fx fx-noise"></div>
   <div class="wrap">
     <header>
       <div class="title">
-        <h1>🏥 Smart Medicine Room — ESP32 Dashboard</h1>
-        <div class="sub">ดูค่าห้องยาแบบเรียลไทม์ + คุมไฟห้อง / พัดลม 360° / ช่องยา</div>
+        <h1 data-text="SMART MEDICINE ROOM — CONTROL TERMINAL">SMART MEDICINE ROOM — CONTROL TERMINAL</h1>
       </div>
 
-      <div class="pillbar">
-        <span id="badgeOnline" class="badge"><span class="dot"></span><span>Offline</span></span>
-        <span id="badgeCritical" class="badge"><span class="dot"></span><span>Normal</span></span>
-        <span id="badgeIR" class="badge"><span class="dot"></span><span>IR: -</span></span>
+      <div class="tabs">
+        <div id="tabLive" class="tab active" onclick="switchView('live')">
+          <span class="pixel">LIVE</span> <span>⚡</span>
+        </div>
+        <div id="tabHistory" class="tab" onclick="switchView('history')">
+          <span class="pixel">HISTORY</span> <span>📊</span>
+        </div>
       </div>
     </header>
 
+    <div class="pillbar" style="margin-bottom:12px;">
+      <span id="badgeOnline" class="badge"><span class="dot"></span><span>Offline</span></span>
+      <span id="badgeCritical" class="badge"><span class="dot"></span><span>Normal</span></span>
+      <span id="badgeIR" class="badge"><span class="dot"></span><span>IR: -</span></span>
+    </div>
+
+    <!-- Top toolbar -->
     <div class="toolbar">
       <div class="left">
+        <button class="danger" onclick="logout()">Logout</button>
         <label>device_id</label>
         <input id="deviceId" type="text" value="esp32_1" />
         <button class="primary" onclick="refreshData()">Refresh</button>
@@ -205,187 +550,337 @@
       </div>
       <div class="right">
         <div class="hint" id="lastUpdate">-</div>
+        <div class="hint" id="rateHint" style="color:#a8b3d6;">-</div>
       </div>
     </div>
 
-    <div class="grid">
-      <!-- SENSOR -->
-      <div class="card">
-        <h3>📈 ค่าที่วัดล่าสุด</h3>
-        <div class="kpi">
-          <div class="box">
-            <div class="t">Temperature (°C)</div>
-            <div class="v" id="tempC">-</div>
-            <div class="s" id="tempHint">-</div>
-          </div>
-          <div class="box">
-            <div class="t">Humidity (%)</div>
-            <div class="v" id="humid">-</div>
-            <div class="s" id="humHint">-</div>
-          </div>
-          <div class="box">
-            <div class="t">IR Sensor</div>
-            <div class="v" id="irState">-</div>
-            <div class="s" id="irHint">-</div>
+    <!-- ================= LIVE VIEW ================= -->
+    <div id="viewLive" class="view active">
+      <div class="grid">
+        <!-- SENSOR -->
+        <div class="card">
+          <h3>📈 ค่าที่วัดล่าสุด</h3>
+          <div class="kpi">
+            <div class="box">
+              <div class="t">Temperature (°C)</div>
+              <div class="v" id="tempC">-</div>
+              <div class="s" id="tempHint">-</div>
+            </div>
+            <div class="box">
+              <div class="t">Humidity (%)</div>
+              <div class="v" id="humid">-</div>
+              <div class="s" id="humHint">-</div>
+            </div>
+            <div class="box">
+              <div class="t">IR Sensor</div>
+              <div class="v" id="irState">-</div>
+              <div class="s" id="irHint">-</div>
+            </div>
+
+            <div class="box">
+              <div class="t">People Entry</div>
+              <div class="v" id="entryToday">-</div>
+              <div class="s">วันนี้ / ทั้งหมด: <span id="entryTotal">-</span></div>
+            </div>
           </div>
 
-          <div class="box">
-            <div class="t">People Entry</div>
-            <div class="v" id="entryToday">-</div>
-            <div class="s">วันนี้ / ทั้งหมด: <span id="entryTotal">-</span></div>
+          <div class="sep"></div>
+          <div class="small-note">เวลา (created_at): <span class="kbd" id="createdAt">-</span></div>
+          <div class="small-note">เกณฑ์ Critical: Temp <span class="kbd">0–30°C</span>, Hum <span class="kbd">40–80%</span></div>
+        </div>
+
+        <!-- STATE -->
+        <div class="card">
+          <h3>🔌 สถานะอุปกรณ์ (Device State)</h3>
+          <div class="kpi">
+            <div class="box">
+              <div class="t">Relay (ไฟห้อง)</div>
+              <div class="v" id="relayOn">-</div>
+              <div class="s" id="relayHint">manual/auto</div>
+            </div>
+            <div class="box">
+              <div class="t">Door Angle (MG90S)</div>
+              <div class="v" id="doorAngleNow">-</div>
+              <div class="s">0–90°</div>
+            </div>
+            <div class="box">
+              <div class="t">Fan Speed (SG90)</div>
+              <div class="v" id="fanSpeedNow">-</div>
+              <div class="s">0–180 (90=Stop)</div>
+            </div>
+            <div class="box">
+              <div class="t">Buzzer</div>
+              <div class="v" id="buzzerOn">-</div>
+              <div class="s">manual / alert</div>
+            </div>
+            <div class="box">
+              <div class="t">LED Mode</div>
+              <div class="v" id="ledMode">-</div>
+              <div class="s" id="ledHint">-</div>
+            </div>
+            <div class="box">
+              <div class="t">Mode</div>
+              <div class="v" id="modeHint">-</div>
+              <div class="s">Normal / Critical</div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+          <div class="small-note">updated_at: <span class="kbd" id="stateUpdatedAt">-</span></div>
+        </div>
+
+        <!-- CONTROL -->
+        <div class="card span2">
+          <h3>🎛️ Control</h3>
+
+          <div class="controls">
+            <!-- Relay -->
+            <div class="group">
+              <div class="gtitle">
+                <b>💡 ไฟห้อง (Relay)</b>
+                <span class="mini">คำสั่ง: RELAY / RELAY_AUTO</span>
+              </div>
+              <div class="row">
+                <button class="ok" onclick="sendCmd('RELAY','1')">Relay ON</button>
+                <button class="danger" onclick="sendCmd('RELAY','0')">Relay OFF</button>
+                <button onclick="sendCmd('RELAY_AUTO','1')">กลับ Auto Light (IR)</button>
+              </div>
+            </div>
+
+            <!-- Fan -->
+            <div class="group">
+              <div class="gtitle">
+                <b>🌀 พัดลม 360° (SG90 Continuous)</b>
+                <span class="mini">คำสั่ง: FAN (0/1) + FAN_SPEED (0–180, 90=Stop)</span>
+              </div>
+
+              <div class="row">
+                <button class="ok" onclick="fanOn()">Fan ON</button>
+                <button class="danger" onclick="fanOff()">Fan OFF</button>
+                <span class="mini">* ON จะหมุนทันที (ตอนนี้ตั้งค่า 120)</span>
+              </div>
+
+              <div class="row">
+                <label>Speed</label>
+                <input id="fanSpeed" type="range" min="0" max="180" value="90"
+                       oninput="fanSpeedVal.textContent=this.value" />
+                <span class="kbd" id="fanSpeedVal">90</span>
+                <button class="primary"
+                        onclick="sendCmd('FAN_SPEED', document.getElementById('fanSpeed').value)">Send</button>
+              </div>
+
+              <div class="row">
+                <button onclick="presetFan(90)">Stop (90)</button>
+                <button onclick="presetFan(120)">CW (120)</button>
+                <button onclick="presetFan(60)">CCW (60)</button>
+                <span class="mini">* บางรุ่นทิศทางอาจสลับ</span>
+              </div>
+            </div>
+
+            <!-- Door -->
+            <div class="group">
+              <div class="gtitle">
+                <b>🧪 ช่องยา (MG90S)</b>
+                <span class="mini">คำสั่ง: DOOR (0–90)</span>
+              </div>
+              <div class="row">
+                <label>Angle</label>
+                <input id="doorAngle" type="range" min="0" max="90" value="0"
+                       oninput="doorAngleVal.textContent=this.value" />
+                <span class="kbd" id="doorAngleVal">0</span>
+                <button class="primary"
+                        onclick="sendCmd('DOOR', document.getElementById('doorAngle').value)">Send</button>
+              </div>
+              <div class="row">
+                <button class="danger" onclick="presetDoor(0)">ปิดช่องยา</button>
+                <button onclick="presetDoor(45)">เปิดครึ่ง (45)</button>
+                <button class="ok" onclick="presetDoor(90)">เปิดช่องยา</button>
+              </div>
+            </div>
+
+            <!-- LED/Buzzer -->
+            <div class="group">
+              <div class="gtitle">
+                <b>🚨 LED สถานะ + Buzzer</b>
+                <span class="mini">คำสั่ง: LED / BUZZER</span>
+              </div>
+              <div class="row">
+                <button onclick="sendCmd('LED','0')">LED Off</button>
+                <button onclick="sendCmd('LED','1')">LED On</button>
+                <button onclick="sendCmd('LED','2')">LED Blink (Critical)</button>
+                <button onclick="sendCmd('LED','4')">LED One-shot</button>
+              </div>
+              <div class="row">
+                <button onclick="sendCmd('BUZZER','1')">Buzzer ON</button>
+                <button onclick="sendCmd('BUZZER','0')">Buzzer OFF</button>
+                <span class="mini">* Critical/Entry มี pattern จาก ESP32</span>
+              </div>
+            </div>
+
+            <div class="small-note">
+              คำสั่งจะถูกบันทึกลง <span class="kbd">device_command</span> แล้วรอ ESP32 มาดึงไปทำงาน
+            </div>
           </div>
         </div>
 
-        <div class="sep"></div>
-        <div class="small-note">เวลา (created_at): <span class="kbd" id="createdAt">-</span></div>
-        <div class="small-note">เกณฑ์ Critical: Temp <span class="kbd">18–28°C</span>, Hum <span class="kbd">40–60%</span></div>
-      </div>
-
-      <!-- STATE -->
-      <div class="card">
-        <h3>🔌 สถานะอุปกรณ์ (Device State)</h3>
-        <div class="kpi">
-          <div class="box">
-            <div class="t">Relay (ไฟห้อง)</div>
-            <div class="v" id="relayOn">-</div>
-            <div class="s" id="relayHint">manual/auto</div>
-          </div>
-          <div class="box">
-            <div class="t">Door Angle (MG90S)</div>
-            <div class="v" id="doorAngleNow">-</div>
-            <div class="s">0–90°</div>
-          </div>
-          <div class="box">
-            <div class="t">Fan Speed (SG90)</div>
-            <div class="v" id="fanSpeedNow">-</div>
-            <div class="s">0–180 (90=Stop)</div>
-          </div>
-          <div class="box">
-            <div class="t">Buzzer</div>
-            <div class="v" id="buzzerOn">-</div>
-            <div class="s">manual / alert</div>
-          </div>
-          <div class="box">
-            <div class="t">LED Mode</div>
-            <div class="v" id="ledMode">-</div>
-            <div class="s" id="ledHint">-</div>
-          </div>
-          <div class="box">
-            <div class="t">Mode</div>
-            <div class="v" id="modeHint">-</div>
-            <div class="s">Normal / Critical</div>
-          </div>
+        <!-- DEBUG -->
+        <div class="card span2">
+          <h3>🧾 Debug JSON</h3>
+          <pre id="jsonBox">-</pre>
         </div>
-
-        <div class="sep"></div>
-        <div class="small-note">updated_at: <span class="kbd" id="stateUpdatedAt">-</span></div>
-      </div>
-
-      <!-- CONTROL -->
-      <div class="card span2">
-        <h3>🎛️ Control</h3>
-
-        <div class="controls">
-          <!-- Relay -->
-          <div class="group">
-            <div class="gtitle">
-              <b>💡 ไฟห้อง (Relay)</b>
-              <span class="mini">คำสั่ง: RELAY / RELAY_AUTO</span>
-            </div>
-            <div class="row">
-              <button class="ok" onclick="sendCmd('RELAY','1')">Relay ON</button>
-              <button class="danger" onclick="sendCmd('RELAY','0')">Relay OFF</button>
-              <button onclick="sendCmd('RELAY_AUTO','1')">กลับ Auto Light (IR)</button>
-            </div>
-          </div>
-
-          <!-- ✅ Fan (SG90) : ตัดซ้ำออก เหลือชุดเดียว -->
-          <div class="group">
-            <div class="gtitle">
-              <b>🌀 พัดลม 360° (SG90 Continuous)</b>
-              <span class="mini">คำสั่ง: FAN (0/1) + FAN_SPEED (0–180, 90=Stop)</span>
-            </div>
-
-            <div class="row">
-              <button class="ok" onclick="fanOn()">Fan ON</button>
-              <button class="danger" onclick="fanOff()">Fan OFF</button>
-              <span class="mini">* ON จะหมุนทันที (ESP32 ตอนนี้ใช้ค่า 120)</span>
-            </div>
-
-            <div class="row">
-              <label>Speed</label>
-              <input id="fanSpeed" type="range" min="0" max="180" value="90"
-                     oninput="fanSpeedVal.textContent=this.value" />
-              <span class="kbd" id="fanSpeedVal">90</span>
-              <button class="primary"
-                      onclick="sendCmd('FAN_SPEED', document.getElementById('fanSpeed').value)">Send</button>
-            </div>
-
-            <div class="row">
-              <button onclick="presetFan(90)">Stop (90)</button>
-              <button onclick="presetFan(120)">CW (120)</button>
-              <button onclick="presetFan(60)">CCW (60)</button>
-              <span class="mini">* บางรุ่นทิศทางอาจสลับ</span>
-            </div>
-          </div>
-
-          <!-- Door (MG90S) -->
-          <div class="group">
-            <div class="gtitle">
-              <b>🧪 ช่องยา (MG90S)</b>
-              <span class="mini">คำสั่ง: DOOR (0–90)</span>
-            </div>
-            <div class="row">
-              <label>Angle</label>
-              <input id="doorAngle" type="range" min="0" max="90" value="0"
-                     oninput="doorAngleVal.textContent=this.value" />
-              <span class="kbd" id="doorAngleVal">0</span>
-              <button class="primary"
-                      onclick="sendCmd('DOOR', document.getElementById('doorAngle').value)">Send</button>
-            </div>
-            <div class="row">
-              <button class="danger" onclick="presetDoor(0)">ปิดช่องยา</button>
-              <button onclick="presetDoor(45)">เปิดครึ่ง (45)</button>
-              <button class="ok" onclick="presetDoor(90)">เปิดช่องยา</button>
-            </div>
-          </div>
-
-          <!-- LED/Buzzer -->
-          <div class="group">
-            <div class="gtitle">
-              <b>🚨 LED สถานะ + Buzzer</b>
-              <span class="mini">คำสั่ง: LED / BUZZER</span>
-            </div>
-            <div class="row">
-              <button onclick="sendCmd('LED','0')">LED Off</button>
-              <button onclick="sendCmd('LED','1')">LED On</button>
-              <button onclick="sendCmd('LED','2')">LED Blink (Critical)</button>
-              <button onclick="sendCmd('LED','4')">LED One-shot</button>
-            </div>
-            <div class="row">
-              <button onclick="sendCmd('BUZZER','1')">Buzzer ON</button>
-              <button onclick="sendCmd('BUZZER','0')">Buzzer OFF</button>
-              <span class="mini">* Critical/Entry จะมี pattern ของมันเองจาก ESP32</span>
-            </div>
-          </div>
-
-          <div class="small-note">
-            คำสั่งจะถูกบันทึกลง <span class="kbd">device_command</span> แล้วรอ ESP32 มาดึงไปทำงาน
-          </div>
-        </div>
-      </div>
-
-      <!-- DEBUG -->
-      <div class="card span2">
-        <h3>🧾 Debug JSON</h3>
-        <pre id="jsonBox">-</pre>
       </div>
     </div>
-  </div>
+
+    <!-- ================= HISTORY VIEW ================= -->
+    <div id="viewHistory" class="view">
+      <div class="grid">
+        <div class="card span2">
+          <h3>📊 History Graph (ย้อนหลัง)</h3>
+
+          <div class="row" style="margin-bottom:10px;">
+            <label>ช่วงเวลา</label>
+            <select id="rangePreset">
+              <option value="1h">ย้อนหลัง 1 ชั่วโมง</option>
+              <option value="6h" selected>ย้อนหลัง 6 ชั่วโมง</option>
+              <option value="24h">ย้อนหลัง 24 ชั่วโมง</option>
+              <option value="7d">ย้อนหลัง 7 วัน</option>
+            </select>
+
+            <button class="primary" onclick="loadHistory()">Load</button>
+            <span class="hint">* ใช้ API: <span class="kbd">history.php</span> / <span class="kbd">ir_event_history.php</span></span>
+          </div>
+
+          <div class="grid" style="margin-top:0;">
+            <div class="chartWrap span2">
+              <div class="small-note">Temp / Hum (Line)</div>
+              <canvas id="chartTH" height="120"></canvas>
+            </div>
+
+            <div class="chartWrap span2">
+              <div class="small-note">IR Detect / minute (Bar)</div>
+              <canvas id="chartEI" height="120"></canvas>
+            </div>
+
+            <div class="small-note span2">
+              Total detect: <span class="kbd" id="entryTotalHistory">0</span>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+          <div class="small-note" id="historyStatus">-</div>
+        </div>
+      </div>
+    </div>
 
 <script>
+  // ===== Custom Cursor Logic =====
+  (function(){
+    const dot  = document.getElementById("cursorDot");
+    const ring = document.getElementById("cursorRing");
+    if(!dot || !ring) return;
+
+    let x = window.innerWidth/2, y = window.innerHeight/2;
+    let rx = x, ry = y; // ring lerp
+
+    window.addEventListener("mousemove", (e)=>{
+      x = e.clientX; y = e.clientY;
+      dot.style.left = x + "px";
+      dot.style.top  = y + "px";
+    }, {passive:true});
+
+    function tick(){
+      // ring ตามแบบนุ่มๆ
+      rx += (x - rx) * 0.18;
+      ry += (y - ry) * 0.18;
+      ring.style.left = rx + "px";
+      ring.style.top  = ry + "px";
+      requestAnimationFrame(tick);
+    }
+    tick();
+
+    // hover detection
+    function setHover(v){
+      dot.classList.toggle("isHover", v);
+      ring.classList.toggle("isHover", v);
+    }
+
+    document.addEventListener("mouseover", (e)=>{
+      const t = e.target;
+      const hoverable = t.closest("button, a, input, select, .tab, .badge");
+      setHover(!!hoverable);
+    });
+
+    document.addEventListener("mousedown", ()=>{
+      dot.classList.add("isDown");
+      ring.classList.add("isDown");
+    });
+    document.addEventListener("mouseup", ()=>{
+      dot.classList.remove("isDown");
+      ring.classList.remove("isDown");
+    });
+
+    // ถ้าเมาส์ออกนอกหน้าจอ ให้ซ่อน
+    document.addEventListener("mouseleave", ()=>{
+      dot.style.opacity = "0";
+      ring.style.opacity = "0";
+    });
+    document.addEventListener("mouseenter", ()=>{
+      dot.style.opacity = "1";
+      ring.style.opacity = ".95";
+    });
+  })();
+  // ====== AUTH GUARD ======
+if (localStorage.getItem("smr_logged_in") !== "1") {
+  location.href = "login.html";
+}
+  // ====== CONFIG ======
   const TEMP_MIN = 0.0, TEMP_MAX = 30.0;
   const HUM_MIN  = 40.0, HUM_MAX  = 80.0;
+
+  // ✅ SECURITY
+  const API_KEY = "FIRST_IOT_2026_SECRET";
+  const DEVICE_TOKEN = "ESP32_ROOM_A_TOKEN_999";
+  
+  function logout(){
+  localStorage.removeItem("smr_logged_in");
+  location.href = "login.html";
+}
+  function secureHeaders(extra = {}) {
+    return {
+      "x-api-key": API_KEY,
+      "x-device-token": DEVICE_TOKEN,
+      ...extra
+    };
+  }
+
+  function apiFetch(url, options = {}) {
+    const merged = secureHeaders(options.headers || {});
+    return fetch(url, { ...options, headers: merged });
+  }
+
+  // ====== ✅ CLIENT RATE LIMIT (WEB) ======
+  const CMD_COOLDOWN_MS = 800;
+  const REFRESH_COOLDOWN_MS = 800;
+
+  let __lastCmdAt = 0;
+  let __cmdInFlight = false;
+
+  let __lastRefreshAt = 0;
+  let __refreshInFlight = false;
+
+  function setRateHint(msg){
+    const el = document.getElementById("rateHint");
+    if(el) el.textContent = msg || "-";
+  }
+
+  // ปิดเฉพาะโซน controls (ไม่ไปปิดปุ่ม Refresh)
+  function setControlsDisabled(disabled){
+    document.querySelectorAll("#viewLive .controls button, #viewLive .controls input").forEach(el=>{
+      el.disabled = !!disabled;
+      el.style.opacity = disabled ? 0.65 : 1;
+      el.style.pointerEvents = disabled ? "none" : "";
+    });
+  }
 
   function setBadge(el, text, cls) {
     el.className = "badge " + (cls || "");
@@ -427,13 +922,13 @@
     sendCmd("DOOR", String(v));
   }
 
-  // ✅ เพิ่มให้ครบ: ปุ่ม Fan ON/OFF
   function fanOn(){
     sendCmd("FAN", "1");
     const r = document.getElementById("fanSpeed");
     if (r) {
       r.value = 120;
       document.getElementById("fanSpeedVal").textContent = "120";
+      sendCmd("FAN_SPEED", "120");
     }
   }
 
@@ -446,7 +941,38 @@
     }
   }
 
+  // ====== VIEW SWITCH ======
+  function switchView(which){
+    const live = document.getElementById("viewLive");
+    const his  = document.getElementById("viewHistory");
+    const tabL = document.getElementById("tabLive");
+    const tabH = document.getElementById("tabHistory");
+
+    if(which === "history"){
+      live.classList.remove("active");
+      his.classList.add("active");
+      tabL.classList.remove("active");
+      tabH.classList.add("active");
+      if(!window.__historyLoadedOnce){
+        window.__historyLoadedOnce = true;
+        loadHistory();
+      }
+    }else{
+      his.classList.remove("active");
+      live.classList.add("active");
+      tabH.classList.remove("active");
+      tabL.classList.add("active");
+    }
+  }
+
+  // ====== LIVE DATA ======
   async function refreshData() {
+    const nowMs = Date.now();
+    if (__refreshInFlight) return;
+    if (nowMs - __lastRefreshAt < REFRESH_COOLDOWN_MS) return;
+    __lastRefreshAt = nowMs;
+    __refreshInFlight = true;
+
     const deviceId = document.getElementById('deviceId').value.trim();
     const lastUpdate = document.getElementById('lastUpdate');
 
@@ -456,7 +982,8 @@
 
     try {
       setBadge(badgeOnline, "Loading...", "b-warn");
-      const res = await fetch(`../api/latest.php?device_id=${encodeURIComponent(deviceId)}`);
+
+      const res = await apiFetch(`../api/latest.php?device_id=${encodeURIComponent(deviceId)}`);
       const data = await res.json();
 
       document.getElementById('jsonBox').textContent = JSON.stringify(data, null, 2);
@@ -479,8 +1006,7 @@
         diffSec = Math.floor((Date.now() - last.getTime()) / 1000);
         online = diffSec <= 12;
       }
-      if (online) setBadge(badgeOnline, "Online", "b-ok");
-      else setBadge(badgeOnline, "Offline", "b-danger");
+      setBadge(badgeOnline, online ? "Online" : "Offline", online ? "b-ok" : "b-danger");
 
       if (ts && diffSec != null) lastUpdate.textContent = `last_seen: ${ts} (${diffSec}s ago)`;
       else lastUpdate.textContent = "ยังไม่มีข้อมูลจาก ESP32 (sensor_log ยังว่าง)";
@@ -533,10 +1059,18 @@
         document.getElementById('ledHint').textContent = "mode = " + lm;
 
         const fanSpeed = (state.fan_speed ?? state.servo_angle ?? null);
-        const doorAng  = (state.door_angle ?? null);
+        const doorAng =
+          (state.door_angle ?? state.door ?? state.doorTarget ?? state.door_target ?? state.servo2 ?? null);
 
-        document.getElementById('fanSpeedNow').textContent = (fanSpeed === null || fanSpeed === undefined) ? "-" : String(fanSpeed);
-        document.getElementById('doorAngleNow').textContent = (doorAng === null || doorAng === undefined) ? "-" : String(doorAng);
+        document.getElementById('fanSpeedNow').textContent =
+          (fanSpeed === null || fanSpeed === undefined) ? "-" : String(fanSpeed);
+
+        if (doorAng === null || doorAng === undefined) {
+          document.getElementById('doorAngleNow').textContent = "-";
+        } else {
+          const a = Number(doorAng);
+          document.getElementById('doorAngleNow').textContent = isFinite(a) ? String(a) : String(doorAng);
+        }
 
         document.getElementById('stateUpdatedAt').textContent = state.updated_at ?? "-";
       } else {
@@ -550,31 +1084,210 @@
       }
 
     } catch (e) {
-      setBadge(document.getElementById('badgeOnline'), "Offline", "b-danger");
-      document.getElementById('lastUpdate').textContent = "ดึงข้อมูลไม่ได้: " + (e?.message || e);
+      setBadge(badgeOnline, "Offline", "b-danger");
+      lastUpdate.textContent = "ดึงข้อมูลไม่ได้: " + (e?.message || e);
+    } finally {
+      __refreshInFlight = false;
     }
   }
 
   async function sendCmd(cmd, value) {
-    const deviceId = document.getElementById('deviceId').value.trim();
-    const form = new URLSearchParams();
-    form.append('device_id', deviceId);
-    form.append('cmd', cmd);
-    form.append('value', value);
+    const nowMs = Date.now();
 
-    const res = await fetch('../api/cmd_set.php', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: form.toString() 
-    });
-    const data = await res.json();
+    if (__cmdInFlight) {
+      setRateHint("⏳ กำลังส่งคำสั่งอยู่...");
+      return;
+    }
 
-    console.log("CMD SENT:", data);
-    refreshData();
+    if (nowMs - __lastCmdAt < CMD_COOLDOWN_MS) {
+      const wait = Math.ceil((CMD_COOLDOWN_MS - (nowMs - __lastCmdAt)) / 100) / 10;
+      setRateHint(`🛑 กันกดรัว: รออีก ${wait}s`);
+      return;
+    }
+    __lastCmdAt = nowMs;
+
+    __cmdInFlight = true;
+    setControlsDisabled(true);
+    setRateHint(`🚀 ส่งคำสั่ง: ${cmd}=${value}`);
+
+    try {
+      const deviceId = document.getElementById('deviceId').value.trim();
+      const form = new URLSearchParams();
+      form.append('device_id', deviceId);
+      form.append('cmd', cmd);
+      form.append('value', value);
+
+      const res = await apiFetch('../api/cmd_set.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: form.toString()
+      });
+
+      const data = await res.json();
+      console.log("CMD SENT:", data);
+
+      setRateHint(data.ok ? "✅ ส่งคำสั่งสำเร็จ" : "⚠️ ส่งคำสั่งไม่สำเร็จ (API ok=false)");
+      await refreshData();
+
+    } catch (e) {
+      setRateHint("❌ ส่งคำสั่งไม่ได้: " + (e?.message || e));
+    } finally {
+      __cmdInFlight = false;
+      setControlsDisabled(false);
+      setTimeout(()=> setRateHint("-"), 1200);
+    }
   }
 
-  setInterval(refreshData, 2000);
+  // ====== HISTORY CHARTS ======
+  let chartTH = null;
+  let chartEI = null;
+
+  function ensureCharts(){
+    const ctxTH = document.getElementById("chartTH");
+    const ctxEI = document.getElementById("chartEI");
+
+    if(!chartTH){
+      chartTH = new Chart(ctxTH, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            { label: "Temp (°C)", data: [], tension: 0.25 },
+            { label: "Hum (%)",   data: [], tension: 0.25 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: "#cfe0ff" } } },
+          scales: {
+            x: { ticks: { color: "#a8b3d6" }, grid: { color: "rgba(255,255,255,.06)" } },
+            y: { ticks: { color: "#a8b3d6" }, grid: { color: "rgba(255,255,255,.06)" } }
+          }
+        }
+      });
+    }
+
+    if(!chartEI){
+      chartEI = new Chart(ctxEI, {
+        type: "bar",
+        data: {
+          labels: [],
+          datasets: [{ label: "DETECT / minute", data: [] }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: "#cfe0ff" } } },
+          scales: {
+            x: { ticks: { color: "#a8b3d6" }, grid: { color: "rgba(255,255,255,.06)" } },
+            y: { beginAtZero: true, ticks: { color: "#a8b3d6" }, grid: { color: "rgba(255,255,255,.06)" } }
+          }
+        }
+      });
+    }
+  }
+
+  async function loadHistory(){
+    const deviceId = document.getElementById('deviceId').value.trim();
+    const preset = document.getElementById('rangePreset').value;
+    const status = document.getElementById('historyStatus');
+
+    try{
+      status.textContent = "Loading history...";
+      ensureCharts();
+
+      const r1 = await apiFetch(`../api/history.php?device_id=${encodeURIComponent(deviceId)}&range=${encodeURIComponent(preset)}`);
+      const d1 = await r1.json();
+      if(!d1.ok){
+        status.textContent = "history.php error";
+        return;
+      }
+      const rows1 = d1.rows || [];
+      chartTH.data.labels = rows1.map(r => r.ts);
+      chartTH.data.datasets[0].data = rows1.map(r => Number(r.temp_c));
+      chartTH.data.datasets[1].data = rows1.map(r => Number(r.humid));
+      chartTH.update();
+
+      const r2 = await apiFetch(`../api/ir_event_history.php?device_id=${encodeURIComponent(deviceId)}&range=${encodeURIComponent(preset)}`);
+      const d2 = await r2.json();
+
+      document.getElementById("entryTotalHistory").textContent = d2.total ?? 0;
+
+      if(!d2.ok){
+        status.textContent = "ir_event_history.php error";
+        return;
+      }
+      const rows2 = d2.rows || [];
+      chartEI.data.labels = rows2.map(r => r.ts);
+      chartEI.data.datasets[0].data = rows2.map(r => Number(r.entry_count));
+      chartEI.update();
+
+      status.textContent = `Loaded TH=${rows1.length} points, DETECT=${rows2.length} buckets • range=${preset}`;
+    }catch(e){
+      status.textContent = "โหลด history ไม่ได้: " + (e?.message || e);
+    }
+  }
+
+  // ====== RUN ======
+  setInterval(() => {
+    const liveActive = document.getElementById("viewLive").classList.contains("active");
+    if(liveActive) refreshData();
+  }, 2000);
+
   refreshData();
+  (function(){
+    const root = document.documentElement;
+    let tx = 0, ty = 0, cx = 0, cy = 0;
+
+    function onMove(e){
+      const x = (e.clientX / window.innerWidth) * 100;
+      const y = (e.clientY / window.innerHeight) * 100;
+
+      // เป้าหมายเป็น % สำหรับ glow center
+      tx = x; ty = y;
+
+      // เป้าหมายเป็น px สำหรับ grid เลื่อนนิดๆ
+      cx = (e.clientX - window.innerWidth/2) * -0.02;
+      cy = (e.clientY - window.innerHeight/2) * -0.02;
+    }
+    window.addEventListener("mousemove", onMove, {passive:true});
+
+    // smooth lerp
+    let px = 50, py = 35, mx = 0, my = 0;
+    function tick(){
+      px += (tx - px) * 0.08;
+      py += (ty - py) * 0.08;
+      mx += (cx - mx) * 0.08;
+      my += (cy - my) * 0.08;
+
+      root.style.setProperty("--px", px + "%");
+      root.style.setProperty("--py", py + "%");
+      root.style.setProperty("--mx", mx + "px");
+      root.style.setProperty("--my", my + "px");
+      requestAnimationFrame(tick);
+    }
+    tick();
+  })();
+
+  // ===== Card tilt on hover (hi-tech feel) =====
+  (function(){
+    const targets = document.querySelectorAll(".card, .toolbar, .group");
+    targets.forEach(el=>{
+      el.style.transformStyle = "preserve-3d";
+
+      el.addEventListener("mousemove", (e)=>{
+        const r = el.getBoundingClientRect();
+        const dx = (e.clientX - (r.left + r.width/2)) / r.width;
+        const dy = (e.clientY - (r.top  + r.height/2)) / r.height;
+        const rotY = dx * 6;   // ซ้าย-ขวา
+        const rotX = -dy * 6;  // บน-ล่าง
+        el.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateY(-1px)`;
+      });
+
+      el.addEventListener("mouseleave", ()=>{
+        el.style.transform = "perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0px)";
+      });
+    });
+  })();
 </script>
 </body>
 </html>
