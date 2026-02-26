@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ACCESS TERMINAL — Smart Medicine Room</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#050816;
+  --neonA:#7aa7ff;
+  --neonB:#2bd47d;
+  --neonC:#ff5c7a;
+  --text:#e9eefc;
+  --muted:#a8b3d6;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family:Orbitron, system-ui;
+  background:
+    radial-gradient(800px 400px at 20% -10%, rgba(122,167,255,.25), transparent 60%),
+    radial-gradient(800px 600px at 120% 0%, rgba(43,212,125,.22), transparent 60%),
+    var(--bg);
+  color:var(--text);
+  height:100vh;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+}
+
+/* scanline effect */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,.05) 0px,
+    rgba(255,255,255,.05) 1px,
+    transparent 2px,
+    transparent 5px
+  );
+  opacity:.08;
+  pointer-events:none;
+}
+
+.card{
+  width:min(420px,92vw);
+  background:rgba(0,0,0,.45);
+  border:1px solid rgba(122,167,255,.5);
+  border-radius:18px;
+  padding:28px 24px;
+  box-shadow:0 0 40px rgba(122,167,255,.25);
+  text-align:center;
+  position:relative;
+}
+
+.title{
+  font-size:18px;
+  letter-spacing:1px;
+  margin-bottom:8px;
+  text-shadow:0 0 18px rgba(122,167,255,.6);
+}
+
+.subtitle{
+  font-family:"Press Start 2P", monospace;
+  font-size:10px;
+  color:var(--muted);
+  margin-bottom:20px;
+}
+
+input{
+  width:100%;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  font-size:14px;
+  outline:none;
+  margin-bottom:14px;
+  text-align:center;
+  letter-spacing:2px;
+}
+
+input:focus{
+  border-color:var(--neonA);
+  box-shadow:0 0 12px rgba(122,167,255,.6);
+}
+
+button{
+  width:100%;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid var(--neonA);
+  background:rgba(122,167,255,.18);
+  color:var(--text);
+  font-size:14px;
+  cursor:pointer;
+  transition:.15s ease;
+  text-shadow:0 0 10px rgba(122,167,255,.5);
+}
+
+button:hover{
+  transform:translateY(-2px);
+  box-shadow:0 0 20px rgba(122,167,255,.7);
+}
+
+.error{
+  margin-top:12px;
+  font-size:12px;
+  color:var(--neonC);
+  display:none;
+  text-shadow:0 0 8px rgba(255,92,122,.6);
+}
+
+.footer{
+  margin-top:18px;
+  font-size:11px;
+  color:var(--muted);
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <div class="title">SMART MEDICINE ROOM</div>
+  <div class="subtitle">ACCESS TERMINAL</div>
+
+  <input id="password" type="password" placeholder="ENTER ACCESS CODE" autocomplete="current-password" />
+
+  <button onclick="login()">INITIALIZE SYSTEM</button>
+
+  <div id="error" class="error">❌ ACCESS DENIED</div>
+
+  <div class="footer">ESP32 IoT Control Panel</div>
+</div>
+
+<script>
+const DASH_PASSWORD = "kokkokkpcs"; // เปลี่ยนรหัสตรงนี้ได้
+
+function login(){
+  const pass = document.getElementById("password").value;
+  const error = document.getElementById("error");
+
+  if(pass === DASH_PASSWORD){
+    localStorage.setItem("smr_logged_in","1");
+    location.href = "index.html";
+  }else{
+    error.style.display = "block";
+    navigator.vibrate?.(100); // ถ้าอุปกรณ์รองรับ
+  }
+}
+
+document.getElementById("password").addEventListener("keydown", function(e){
+  if(e.key === "Enter") login();
+});
+</script>
+
+</body>
+</html>
